@@ -1,0 +1,167 @@
+#!/usr/bin/env ruby
+$: << File.expand_path('../../lib', __FILE__)
+
+require 'mappru'
+require 'optparse'
+
+Version = Mappru::VERSION
+
+DEFAULT_FILENAME = 'RouteTable'
+
+MAGIC_COMMENT = <<-EOS
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+EOS
+
+def parse_options(argv)
+  options = {
+    file: DEFAULT_FILENAME,
+    output: '-',
+    color: true,
+    aws: {},
+  }
+
+  opt = OptionParser.new
+  opt.on('-k', '--access-key ACCESS_KEY') {|v| options[:aws][:access_key_id]     = v }
+  opt.on('-s', '--secret-key SECRET_KEY') {|v| options[:aws][:secret_access_key] = v }
+  opt.on('-r', '--region REGION')         {|v| options[:aws][:region]            = v }
+
+  opt.on('', '--profile PROFILE') do |v|
+    options[:aws][:credentials] ||= {}
+    options[:aws][:credentials][:profile_name] = v
+  end
+
+  opt.on('', '--credentials-path PATH') do |v|
+    options[:aws][:credentials] ||= {}
+    options[:aws][:credentials][:path] = v
+  end
+
+  opt.on('-a', '--apply')          {    options[:mode]    = :apply        }
+  opt.on('-f', '--file FILE')      {|v| options[:file]    = v             }
+  opt.on(''  , '--dry-run')        {    options[:dry_run] = true          }
+  opt.on('-e', '--export')         {    options[:mode]    = :export       }
+  opt.on('-o', '--output FILE')    {|v| options[:output]  = v             }
+  opt.on(''  , '--split')          {    options[:split]   = :true         }
+  opt.on(''  , '--vpc-id REGEXP')  {|v| options[:vpc_id]  = Regexp.new(v) }
+  opt.on(''  , '--rt-name REGEXP') {|v| options[:rt_name] = Regexp.new(v) }
+  opt.on(''  , '--no-color')       {    options[:color]   = false         }
+  opt.on(''  , '--debug')          {    options[:debug]   = true          }
+
+  opt.parse!(argv)
+
+  unless options[:mode]
+    puts opt.help
+    exit 1
+  end
+
+  if options[:aws][:credentials]
+    credentials = Aws::SharedCredentials.new(options[:aws][:credentials])
+    options[:aws][:credentials] = credentials
+  end
+
+  Aws.config.update(options[:aws])
+  String.colorize = options[:color]
+
+  if options[:debug]
+    Mappru::Logger.instance.set_debug(options[:debug])
+
+    Aws.config.update(
+      :http_wire_trace => true,
+      :logger => Mappru::Logger.instance
+    )
+  end
+
+  options
+rescue => e
+  $stderr.puts("[ERROR] #{e.message}")
+  exit 1
+end
+
+def main(argv)
+  options = parse_options(argv)
+  client = Mappru::Client.new(options)
+  logger = Mappru::Logger.instance
+
+  case options[:mode]
+  when :export
+    exported = client.export
+    output = options[:output]
+
+    if options[:split]
+      logger.info('Export Route Table')
+
+      output = DEFAULT_FILENAME if output == '-'
+      dir = File.dirname(output)
+      FileUtils.mkdir_p(dir)
+      requires = []
+
+      exported.each do |vpc_id, rts|
+        vpc_dir = File.join(dir, vpc_id)
+        FileUtils.mkdir_p(vpc_id)
+
+        rts.each do |rt_name, attrs|
+          filename = "#{rt_name}.table"
+          requires << File.join(vpc_id, filename)
+          rt_file = File.join(vpc_dir, filename)
+
+          logger.info("  write `#{rt_file}`")
+
+          dsl = Mappru::DSL.convert({vpc_id => {rt_name => attrs}}, options)
+
+          open(rt_file, 'wb') do |f|
+            f.puts MAGIC_COMMENT
+            f.puts dsl
+          end
+        end
+      end
+
+      logger.info("  write `#{output}`")
+
+      open(output, 'wb') do |f|
+        f.puts MAGIC_COMMENT
+
+        requires.each do |rt_file|
+          f.puts "require '#{rt_file}'"
+        end
+      end
+    else
+      dsl = Mappru::DSL.convert(exported, options)
+
+      if output == '-'
+        logger.info('# Export Route Table')
+        puts dsl
+      else
+        logger.info("Export Route Table to `#{output}`")
+        open(output, 'wb') do |f|
+          f.puts MAGIC_COMMENT
+          f.puts dsl
+        end
+      end
+    end
+  when :apply
+    file = options[:file]
+
+    unless File.exist?(file)
+      raise "No RouteTable found (looking for: #{file})"
+    end
+
+    message = "Apply `#{file}` to Route Table"
+    message << ' (dry-run)' if options[:dry_run]
+    logger.info(message)
+
+    updated = client.apply(file)
+
+    logger.info('No change'.intense_blue) unless updated
+  else
+    raise "Unknown mode: #{options[:mode]}"
+  end
+rescue => e
+  if options[:debug]
+    raise e
+  else
+    $stderr.puts("[ERROR] #{e.message}".red)
+    exit 1
+  end
+end
+
+main(ARGV)
