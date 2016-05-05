@@ -26,7 +26,7 @@ class Mappru::Exporter
       next unless matched?(vpc_id, @options[:vpc_id])
 
       unless name
-        log(:warn, "No name Route Table can not manage: #{vpc_id}", color: :yellow)
+        log(:warn, "Cannot manage the nameless Route Table: #{vpc_id}", color: :yellow)
         next
       end
 
