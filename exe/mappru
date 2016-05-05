@@ -77,6 +77,81 @@ rescue => e
   exit 1
 end
 
+def run_export(client, options)
+  logger = Mappru::Logger.instance
+  exported = client.export
+  output = options[:output]
+
+  if options[:split]
+    logger.info('Export Route Table')
+
+    output = DEFAULT_FILENAME if output == '-'
+    dir = File.dirname(output)
+    FileUtils.mkdir_p(dir)
+    requires = []
+
+    exported.each do |vpc_id, rts|
+      vpc_dir = File.join(dir, vpc_id)
+      FileUtils.mkdir_p(vpc_id)
+
+      rts.each do |rt_name, attrs|
+        filename = "#{rt_name}.rtbl"
+        requires << File.join(vpc_id, filename)
+        rt_file = File.join(vpc_dir, filename)
+
+        logger.info("  write `#{rt_file}`")
+
+        dsl = Mappru::DSL.convert({vpc_id => {rt_name => attrs}}, options)
+
+        open(rt_file, 'wb') do |f|
+          f.puts MAGIC_COMMENT
+          f.puts dsl
+        end
+      end
+    end
+
+    logger.info("  write `#{output}`")
+
+    open(output, 'wb') do |f|
+      f.puts MAGIC_COMMENT
+
+      requires.each do |rt_file|
+        f.puts "require '#{rt_file}'"
+      end
+    end
+  else
+    dsl = Mappru::DSL.convert(exported, options)
+
+    if output == '-'
+      logger.info('# Export Route Table')
+      puts dsl
+    else
+      logger.info("Export Route Table to `#{output}`")
+      open(output, 'wb') do |f|
+        f.puts MAGIC_COMMENT
+        f.puts dsl
+      end
+    end
+  end
+end
+
+def run_apply(client, options)
+  logger = Mappru::Logger.instance
+  file = options[:file]
+
+  unless File.exist?(file)
+    raise "No RouteTable found (looking for: #{file})"
+  end
+
+  message = "Apply `#{file}` to Route Table"
+  message << ' (dry-run)' if options[:dry_run]
+  logger.info(message)
+
+  updated = client.apply(file)
+
+  logger.info('No change'.intense_blue) unless updated
+end
+
 def main(argv)
   options = parse_options(argv)
   client = Mappru::Client.new(options)
@@ -84,74 +159,9 @@ def main(argv)
 
   case options[:mode]
   when :export
-    exported = client.export
-    output = options[:output]
-
-    if options[:split]
-      logger.info('Export Route Table')
-
-      output = DEFAULT_FILENAME if output == '-'
-      dir = File.dirname(output)
-      FileUtils.mkdir_p(dir)
-      requires = []
-
-      exported.each do |vpc_id, rts|
-        vpc_dir = File.join(dir, vpc_id)
-        FileUtils.mkdir_p(vpc_id)
-
-        rts.each do |rt_name, attrs|
-          filename = "#{rt_name}.table"
-          requires << File.join(vpc_id, filename)
-          rt_file = File.join(vpc_dir, filename)
-
-          logger.info("  write `#{rt_file}`")
-
-          dsl = Mappru::DSL.convert({vpc_id => {rt_name => attrs}}, options)
-
-          open(rt_file, 'wb') do |f|
-            f.puts MAGIC_COMMENT
-            f.puts dsl
-          end
-        end
-      end
-
-      logger.info("  write `#{output}`")
-
-      open(output, 'wb') do |f|
-        f.puts MAGIC_COMMENT
-
-        requires.each do |rt_file|
-          f.puts "require '#{rt_file}'"
-        end
-      end
-    else
-      dsl = Mappru::DSL.convert(exported, options)
-
-      if output == '-'
-        logger.info('# Export Route Table')
-        puts dsl
-      else
-        logger.info("Export Route Table to `#{output}`")
-        open(output, 'wb') do |f|
-          f.puts MAGIC_COMMENT
-          f.puts dsl
-        end
-      end
-    end
+    run_export(client, options)
   when :apply
-    file = options[:file]
-
-    unless File.exist?(file)
-      raise "No RouteTable found (looking for: #{file})"
-    end
-
-    message = "Apply `#{file}` to Route Table"
-    message << ' (dry-run)' if options[:dry_run]
-    logger.info(message)
-
-    updated = client.apply(file)
-
-    logger.info('No change'.intense_blue) unless updated
+    run_apply(client, options)
   else
     raise "Unknown mode: #{options[:mode]}"
   end
