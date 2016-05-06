@@ -55,7 +55,11 @@ class Mappru::Exporter
 
     # route -> (Array<Route>, nil)
     # http://docs.aws.amazon.com/sdkforruby/api/Aws/EC2/RouteTable.html#routes-instance_method
-    rt.routes.reject(&:nil?).each {|route|
+    sorted_routes = rt.routes.reject(&:nil?).sort_by do |route|
+      IPAddr.new(route.destination_cidr_block).to_i
+    end
+
+    sorted_routes.each do |route|
       # Skip "local"
       next if route.gateway_id == 'local'
 
@@ -72,7 +76,7 @@ class Mappru::Exporter
       ].each {|k| hash[k] = route.send(k) }
 
       result[:routes] << hash
-    }
+    end
 
     result
   end
