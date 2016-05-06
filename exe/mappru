@@ -91,13 +91,14 @@ def run_export(client, options)
     requires = []
 
     exported.each do |vpc_id, rts|
-      vpc_name = client.vpc_name_by_id(vpc_id) || vpc_id
-      vpc_dir = File.join(dir, vpc_name)
+      vpc_dir_basename = client.vpc_name_by_id(vpc_id) || vpc_id
+      vpc_dir_basename.gsub(/\s+/, '_')
+      vpc_dir = File.join(dir, vpc_dir_basename)
       FileUtils.mkdir_p(vpc_dir)
 
       rts.each do |rt_name, attrs|
-        filename = "#{rt_name}.rtbl"
-        requires << File.join(vpc_name, filename)
+        filename = "#{rt_name}.rtbl".gsub(/\s+/, '_')
+        requires << File.join(vpc_dir_basename, filename)
         rt_file = File.join(vpc_dir, filename)
 
         logger.info("  write `#{rt_file}`")
