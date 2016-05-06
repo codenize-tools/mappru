@@ -78,6 +78,8 @@ class Mappru::Driver
     end
   end
 
+  private
+
   def rt_id_by_vpc_rt_name
     return @rt_ids if @rt_ids
 
