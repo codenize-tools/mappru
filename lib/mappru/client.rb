@@ -13,6 +13,11 @@ class Mappru::Client
     Mappru::Exporter.export(@client, @options)
   end
 
+  def vpc_name_by_id(vpc_id)
+    name_tag = @resource.vpc(vpc_id).tags.find {|i| i.key == 'Name' } || {}
+    name_tag[:value]
+  end
+
   def apply(file)
     walk(file)
   end
