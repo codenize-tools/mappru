@@ -70,7 +70,6 @@ class Mappru::Driver
     log(:info, "Update Route `#{vpc_id}` > `#{rt_name}` > `#{dest_cidr}`", color: :green)
     log(:info, diff(old_route, route, color: @options[:color]), color: false)
 
-
     unless @options[:dry_run]
       rt_id = rt_id_by_vpc_rt_name.fetch(vpc_id).fetch(rt_name)
       params = route.merge(route_table_id: rt_id, destination_cidr_block: dest_cidr)
