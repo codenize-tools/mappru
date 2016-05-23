@@ -25,10 +25,10 @@ Or install it yourself as:
 ```sh
 export AWS_ACCESS_KEY_ID='...'
 export AWS_SECRET_ACCESS_KEY='...'
-mappru -e -o RouteTable  # export VPC Route Table
+mappru -e -o Routetable  # export VPC Route Table
 vi PolicyFile
 mappru -a --dry-run
-mappru -a                # apply `RouteTable`
+mappru -a                # apply `Routetable`
 ```
 
 ## Help
@@ -52,7 +52,7 @@ Usage: mappru [options]
         --debug
 ```
 
-## RouteTable example
+## Routetable example
 
 ```ruby
 require 'other/tablefile'
