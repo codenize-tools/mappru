@@ -183,7 +183,7 @@ rescue => e
   if options[:debug]
     raise e
   else
-    $stderr.puts("[ERROR] #{e.message}".red)
+    $stderr.puts("[ERROR] #{e.message}\n\t#{e.backtrace.first}".red)
     exit 1
   end
 end
