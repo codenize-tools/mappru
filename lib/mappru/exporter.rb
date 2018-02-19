@@ -62,6 +62,8 @@ class Mappru::Exporter
     sorted_routes.each do |route|
       # Skip "local"
       next if route.gateway_id == 'local'
+      # Skip propagated entry
+      next if route.origin == 'EnableVgwRoutePropagation'
 
       hash = {}
 
