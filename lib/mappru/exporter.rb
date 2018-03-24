@@ -8,15 +8,13 @@ class Mappru::Exporter
 
   def initialize(client, options = {})
     @client = client
-    @resource = Aws::EC2::Resource.new(client: @client)
     @options = options
   end
 
   def export
     result = {}
-    @resource
 
-    route_tables = @resource.route_tables
+    route_tables = @client.describe_route_tables().flat_map(&:route_tables)
 
     route_tables.each do |rt|
       vpc_id = rt.vpc_id
@@ -48,14 +46,13 @@ class Mappru::Exporter
 
   def export_route_table(rt)
     result = {
-      route_table_id: rt.id,
+      route_table_id: rt.route_table_id,
       routes: [],
       subnets: export_subnets(rt.associations),
     }
 
-    # route -> (Array<Route>, nil)
-    # http://docs.aws.amazon.com/sdkforruby/api/Aws/EC2/RouteTable.html#routes-instance_method
-    sorted_routes = rt.routes.reject(&:nil?).sort_by do |route|
+    # TODO: support VPC endpoint
+    sorted_routes = rt.routes.select(&:destination_cidr_block).sort_by do |route|
       IPAddr.new(route.destination_cidr_block).to_i
     end
 
