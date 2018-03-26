@@ -4,7 +4,6 @@ class Mappru::Driver
 
   def initialize(client, options = {})
     @client = client
-    @resource = Aws::EC2::Resource.new(client: @client)
     @options = options
   end
 
@@ -12,11 +11,10 @@ class Mappru::Driver
     log(:info, "Create Route Table `#{vpc_id}` > `#{name}`", color: :cyan)
 
     unless @options[:dry_run]
-      vpc = @resource.vpc(vpc_id)
-      rt = vpc.create_route_table
+      route_table_id = @client.create_route_table(vpc_id: vpc_id).route_table.route_table_id
       name_tag = {key: 'Name', value: name}
-      rt.create_tags(tags: [name_tag])
-      rt_id_by_vpc_rt_name[vpc_id][name] = rt.id
+      @client.create_tags(resources: [route_table_id], tags: [name_tag])
+      rt_id_by_vpc_rt_name[vpc_id][name] = route_table_id
     end
 
     {routes: [], subnets: []}
@@ -83,7 +81,7 @@ class Mappru::Driver
     return @rt_ids if @rt_ids
 
     @rt_ids = {}
-    route_tables = @resource.route_tables
+    route_tables = @client.describe_route_tables().flat_map(&:route_tables)
 
     route_tables.each do |rt|
       vpc_id = rt.vpc_id
@@ -93,7 +91,7 @@ class Mappru::Driver
       next unless name
 
       @rt_ids[vpc_id] ||= {}
-      @rt_ids[vpc_id][name] = rt.id
+      @rt_ids[vpc_id][name] = rt.route_table_id
     end
 
     @rt_ids
@@ -103,7 +101,7 @@ class Mappru::Driver
     return @assoc_ids if @assoc_ids
 
     @assoc_ids = {}
-    associations = @resource.route_tables.map(&:associations).flat_map(&:to_a)
+    associations = @client.describe_route_tables().flat_map(&:route_tables).map(&:associations).flat_map(&:to_a)
 
     associations.each do |assoc|
       if assoc.subnet_id
