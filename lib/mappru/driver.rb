@@ -45,6 +45,11 @@ class Mappru::Driver
   end
 
   def create_route(vpc_id, rt_name, dest_cidr, attrs)
+    if attrs[:ignore]
+      log(:info, "[Difference in ignored route] Create Route `#{vpc_id}` > `#{rt_name}` > `#{dest_cidr}`", color: :yellow)
+      return
+    end
+
     log(:info, "Create Route `#{vpc_id}` > `#{rt_name}` > `#{dest_cidr}`", color: :cyan)
 
     unless @options[:dry_run]
@@ -65,6 +70,15 @@ class Mappru::Driver
   end
 
   def update_route(vpc_id, rt_name, dest_cidr, route, old_route)
+    if route[:ignore]
+      route_except_ignore = route.dup.tap { |_| _.delete(:ignore) }
+      if route_except_ignore != old_route
+        log(:info, "[Difference in ignored route] Update Route `#{vpc_id}` > `#{rt_name}` > `#{dest_cidr}`", color: :yellow)
+        log(:info, diff(old_route, route_except_ignore, color: @options[:color]), color: false)
+      end
+      return
+    end
+
     log(:info, "Update Route `#{vpc_id}` > `#{rt_name}` > `#{dest_cidr}`", color: :green)
     log(:info, diff(old_route, route, color: @options[:color]), color: false)
 

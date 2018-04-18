@@ -62,6 +62,9 @@ vpc "vpc-12345678" do
     subnets "subnet-12345678"
     route destination_cidr_block: "0.0.0.0/0", gateway_id: "igw-12345678"
     route destination_cidr_block: "192.168.100.101/32", network_interface_id: "eni-12345678"
+
+    # Ignore changes in routes to specific destinations
+    route destination_cidr_block: "192.168.100.200/32", ignore: true
   end
 
   route_table "bar-rt" do
